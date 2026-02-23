@@ -1,0 +1,67 @@
+# THIS IS A LIST OF WORDS AND PHRASES THAT MIGHT INDICATE Spam
+# Feel free to add or delete to this file.
+
+# Spam word list - one word or phrase per line
+# Lines starting with # are ignored as comments
+
+# Prizes and money
+click here
+buy now
+limited time
+act now
+free money
+guaranteed
+no credit card
+winner
+congratulations
+claim prize
+call now
+offer expires
+urgent
+risk free
+special offer
+discount code
+deal
+checkout
+apply now
+sign up
+
+# Account and verification scams
+verify account
+confirm identity
+update information
+unusual activity
+suspicious
+unauthorized
+account compromised
+click to verify
+verify your
+validate account
+reactivate account
+confirm access
+restore access
+
+# More common spam patterns
+free cash
+make money
+work from home
+earn money now
+get paid
+easy money
+quick cash
+hidden charges
+no obligation
+act immediately
+don't delay
+limited offer
+expires soon
+last chance
+final notice
+immediate action
+confirm details
+verify information
+update account
+secure account
+protect account
+claim reward
+
