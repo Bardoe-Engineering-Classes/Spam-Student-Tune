@@ -228,6 +228,89 @@ def print_stats(stats):
     print("="*50 + "\n")
 
 
+def optimize_threshold(data, spam_words, start=0.0, end=.010, step=0.0005):
+    """
+    Find the optimal threshold that maximizes F1-Score.
+    Tests thresholds from start to end in given step increments.
+    Returns (best_threshold, best_stats, all_results).
+    """
+    best_threshold = start
+    best_f1 = 0.0
+    best_stats = None
+    all_results = []
+    
+    # Test each threshold value
+    threshold = start
+    while threshold <= end:
+        #print(threshold)
+        # Classify all messages with this threshold
+        predictions = []
+        true_labels = []
+        
+        for text, label in data:
+            if text.strip():
+                spam_pred, score = is_spam(text, spam_words, threshold=threshold)
+                pred_label = LABEL_SPAM if spam_pred else LABEL_HAM
+                predictions.append((pred_label, score))
+                true_labels.append(label)
+            else:
+                predictions.append((LABEL_HAM, 0.0))
+                true_labels.append(label)
+        
+        # Compute stats for this threshold
+        stats = compute_stats(predictions, true_labels)
+        
+        # Track this result
+        result = {
+            'threshold': threshold,
+            'f1': stats['f1_spam'] if stats['f1_spam'] is not None else 0.0,
+            'accuracy': stats['accuracy'] if stats['accuracy'] is not None else 0.0,
+            'precision': stats['precision_spam'] if stats['precision_spam'] is not None else 0.0,
+            'recall': stats['recall_spam'] if stats['recall_spam'] is not None else 0.0,
+            'stats': stats
+        }
+        all_results.append(result)
+        
+        # Update best if this is better
+        if result['f1'] > best_f1:
+            best_f1 = result['f1']
+            best_threshold = threshold
+            best_stats = stats
+        
+        threshold = round(threshold + step, 4)  # Round to avoid floating point errors
+    
+    return best_threshold, best_stats, all_results
+
+
+def print_optimization_results(best_threshold, best_stats, all_results):
+    """Print threshold optimization results."""
+    print("\n" + "="*50)
+    print("THRESHOLD OPTIMIZATION RESULTS")
+    print("="*50)
+    print(f"Tested {len(all_results)} threshold values from 0.0 to 1.0 (step: 0.05)\n")
+    
+    print("Top 5 thresholds by F1-Score:")
+    print("-" * 50)
+    # Sort by F1-score descending
+    sorted_results = sorted(all_results, key=lambda x: x['f1'], reverse=True)[:5]
+    for i, result in enumerate(sorted_results, 1):
+        print(f"{i}. Threshold: {result['threshold']:.2f}")
+        print(f"   F1-Score: {result['f1']:.2%} | Accuracy: {result['accuracy']:.2%}")
+        print(f"   Precision: {result['precision']:.2%} | Recall: {result['recall']:.2%}")
+        print()
+    
+    print("="*50)
+    print(f"OPTIMAL THRESHOLD: {best_threshold:.4f}")
+    print("="*50)
+    print(f"F1-Score: {best_stats['f1_spam']:.2%}")
+    print(f"Accuracy: {best_stats['accuracy']:.2%}")
+    print(f"Precision: {best_stats['precision_spam']:.2%}")
+    print(f"Recall: {best_stats['recall_spam']:.2%}")
+    print(f"Predicted as SPAM: {best_stats['spam_predicted']}")
+    print(f"Predicted as HAM: {best_stats['ham_predicted']}")
+    print("="*50 + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Spam Classifier: Detect spam using heuristic features.'
@@ -258,6 +341,11 @@ def main():
         default=SPAM_THRESHOLD,
         help=f'Spam threshold (0.0-1.0, default: {SPAM_THRESHOLD})'
     )
+    parser.add_argument(
+        '--optimize-threshold',
+        action='store_true',
+        help='Find the optimal threshold by testing values from 0.0 to 1.0 in steps of 0.05 to maximize F1-Score'
+    )
     
     args = parser.parse_args()
     
@@ -272,23 +360,34 @@ def main():
         print("Error: No data loaded from CSV.", file=sys.stderr)
         sys.exit(1)
     
-    # Classify messages
-    predictions = []
-    true_labels = []
-    for text, label in data:
-        if text.strip():
-            spam_pred, score = is_spam(text, spam_words, threshold=args.threshold)
-            pred_label = LABEL_SPAM if spam_pred else LABEL_HAM
-            predictions.append((pred_label, score))
-            true_labels.append(label)
-        else:
-            predictions.append((LABEL_HAM, 0.0))  # Empty messages are ham
-            true_labels.append(label)
-    
-    # Compute and print stats
-    # print(true_labels)
-    stats = compute_stats(predictions, true_labels)
-    print_stats(stats)
+    # Check if optimization mode is enabled
+    if args.optimize_threshold:
+        # Verify labels exist for optimization
+        if not any(label is not None for _, label in data):
+            print("Error: Cannot optimize threshold without labels in the dataset.", file=sys.stderr)
+            sys.exit(1)
+        
+        # Run threshold optimization
+        print("Optimizing threshold to maximize F1-Score...")
+        best_threshold, best_stats, all_results = optimize_threshold(data, spam_words)
+        print_optimization_results(best_threshold, best_stats, all_results)
+    else:
+        # Normal classification with specified threshold
+        predictions = []
+        true_labels = []
+        for text, label in data:
+            if text.strip():
+                spam_pred, score = is_spam(text, spam_words, threshold=args.threshold)
+                pred_label = LABEL_SPAM if spam_pred else LABEL_HAM
+                predictions.append((pred_label, score))
+                true_labels.append(label)
+            else:
+                predictions.append((LABEL_HAM, 0.0))  # Empty messages are ham
+                true_labels.append(label)
+        
+        # Compute and print stats
+        stats = compute_stats(predictions, true_labels)
+        print_stats(stats)
 
 
 if __name__ == '__main__':
