@@ -42,21 +42,54 @@ def compute_features(message, spam_words):
     """
     features = {}
     
-
+    if not message.strip():
+        return features
     
     normalized = normalize_text(message)
-    # Create features that you will put into the formula. For example:
-    # Feature 1: Spam word hits
-    # Count how many spam words are present in the message and normalize by total words
-    # Feature 2: Punctuation analysis
-    # There may be other things you want to add as features.
-
-    # Add your feature score to the features dict, for example:
-    # features['spam_words'] = spam_word_score
-
-    # Then in the config.py file, you can assign weights to these features and use them in the formula to compute the final spam score.
     
-    ## YOUR CODE HERE ## 
+    # Tokenize the message into words
+    words = re.findall(r'\b\w+\b', normalized)
+    total_words = len(words)
+    
+    if total_words == 0:
+        return features
+    
+    # Feature 1: Spam word hits
+    # Count how many spam words/phrases are present in the message
+    spam_word_count = 0
+    for spam_word in spam_words:
+        if spam_word in normalized:
+            spam_word_count += 1
+    
+    # Normalize by total words (cap at 1.0)
+    features['spam_words'] = min(spam_word_count / max(total_words / 3, 1), 1.0)
+    
+    # Feature 2: Punctuation analysis
+    # Count excessive spam punctuation (!, ?, etc.)
+    spam_punct_count = sum(message.count(char) for char in SPAM_PUNCTUATION)
+    total_chars = len(message)
+    features['punctuation'] = min(spam_punct_count / total_chars, 1.0) if total_chars > 0 else 0.0
+    
+    # Feature 3: ALL CAPS words
+    # Count words that are all uppercase (longer than 2 chars to avoid acronyms)
+    all_caps_words = sum(1 for word in words if len(word) > 2 and word.isupper())
+    features['all_caps'] = min(all_caps_words / total_words, 1.0)
+    
+    # Feature 4: Urgency indicators
+    # Look for multiple exclamation marks, urgency keywords, etc.
+    urgency_score = 0.0
+    
+    # Multiple exclamation or question marks
+    if '!!' in message or '???' in message:
+        urgency_score += 0.4
+    
+    # Check for urgency keywords in uppercase
+    urgency_keywords = ['urgent', 'now', 'immediately', 'act', 'limited', 'expires', 'final']
+    for keyword in urgency_keywords:
+        if keyword.upper() in message:
+            urgency_score += 0.15
+    
+    features['urgency'] = min(urgency_score, 1.0)
     
     return features
 
@@ -211,7 +244,7 @@ def main():
     )
     parser.add_argument(
         '--label-column',
-        default=None,
+        default="label",
         help='Name of the column containing true labels (optional, for evaluation)'
     )
     parser.add_argument(
@@ -253,6 +286,7 @@ def main():
             true_labels.append(label)
     
     # Compute and print stats
+    # print(true_labels)
     stats = compute_stats(predictions, true_labels)
     print_stats(stats)
 
