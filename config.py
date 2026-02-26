@@ -8,10 +8,10 @@ SPAM_THRESHOLD = 0.5
 
 # Feature weights (sum should not exceed 1.0 for interpretability)
 FEATURE_WEIGHTS = {
-    'spam_words': 0.2,      # Weight for spam word detection
-    'punctuation': 0.2,     # Weight for excessive punctuation
-    'all_caps': 0.02,        # Weight for all caps words
-    'urgency': 0.4,         # Weight for urgency indicators
+    'spam_words': 0.3,      # Weight for spam word detection
+    'punctuation': 0.5,     # Weight for excessive punctuation
+    'all_caps': 0.5,        # Weight for all caps words
+    'urgency': 0.5,         # Weight for urgency indicators
 }
 
 # Punctuation marks that indicate spam when excessive

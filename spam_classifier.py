@@ -42,51 +42,61 @@ def compute_features(message, spam_words):
     """
     features = {}
     
-    if not message.strip():
+    if not message or not message.strip():
         return features
     
-    normalized = normalize_text(message)
+    # Keep original message for punctuation / caps checks, and use a lowercase copy for matching
+    normalized = message.lower()
     
-    # Tokenize the message into words
-    words = re.findall(r'\b\w+\b', normalized)
-    total_words = len(words)
+    # Tokenize both original and lowercase words
+    words_orig = re.findall(r'\b\w+\b', message)
+    words_lower = [w.lower() for w in words_orig]
+    total_words = len(words_lower)
     
     if total_words == 0:
         return features
     
     # Feature 1: Spam word hits
-    # Count how many spam words/phrases are present in the message
+    # Match full words or exact phrases to avoid substring false positives
     spam_word_count = 0
     for spam_word in spam_words:
-        if spam_word in normalized:
-            spam_word_count += 1
+        spam_word = spam_word.lower().strip()
+        if not spam_word:
+            continue
+        if ' ' in spam_word:
+            # phrase match with word boundaries on the normalized text
+            if re.search(r'\b' + re.escape(spam_word) + r'\b', normalized):
+                spam_word_count += 1
+        else:
+            # single-word exact token match
+            if spam_word in words_lower:
+                spam_word_count += 1
     
-    # Normalize by total words (cap at 1.0)
-    features['spam_words'] = min(spam_word_count / max(total_words / 3, 1), 1.0)
+    # Normalize by total words (use a smaller divisor so single hits matter less)
+    features['spam_words'] = min(spam_word_count / max(total_words / 2, 1), 1.0)
     
     # Feature 2: Punctuation analysis
-    # Count excessive spam punctuation (!, ?, etc.)
+    # Count excessive spam punctuation (!, ?, etc.) relative to non-space chars
     spam_punct_count = sum(message.count(char) for char in SPAM_PUNCTUATION)
-    total_chars = len(message)
-    features['punctuation'] = min(spam_punct_count / total_chars, 1.0) if total_chars > 0 else 0.0
+    non_space_chars = len(message.replace(' ', ''))
+    features['punctuation'] = min(spam_punct_count / non_space_chars, 1.0) if non_space_chars > 0 else 0.0
     
     # Feature 3: ALL CAPS words
     # Count words that are all uppercase (longer than 2 chars to avoid acronyms)
-    all_caps_words = sum(1 for word in words if len(word) > 2 and word.isupper())
+    all_caps_words = sum(1 for word in words_orig if len(word) > 2 and word.isupper())
     features['all_caps'] = min(all_caps_words / total_words, 1.0)
     
     # Feature 4: Urgency indicators
-    # Look for multiple exclamation marks, urgency keywords, etc.
     urgency_score = 0.0
     
-    # Multiple exclamation or question marks
+    # Multiple exclamation or question marks in the original message
     if '!!' in message or '???' in message:
         urgency_score += 0.4
     
-    # Check for urgency keywords in uppercase
+    # Check for urgency keywords in the normalized (lowercase) text
     urgency_keywords = ['urgent', 'now', 'immediately', 'act', 'limited', 'expires', 'final']
     for keyword in urgency_keywords:
-        if keyword.upper() in message:
+        if keyword in normalized:
             urgency_score += 0.15
     
     features['urgency'] = min(urgency_score, 1.0)
@@ -228,7 +238,7 @@ def print_stats(stats):
     print("="*50 + "\n")
 
 
-def optimize_threshold(data, spam_words, start=0.0, end=.010, step=0.0005):
+def optimize_threshold(data, spam_words, start=0.0, end=1.0, step=0.003):
     """
     Find the optimal threshold that maximizes F1-Score.
     Tests thresholds from start to end in given step increments.
@@ -241,8 +251,7 @@ def optimize_threshold(data, spam_words, start=0.0, end=.010, step=0.0005):
     
     # Test each threshold value
     threshold = start
-    while threshold <= end:
-        #print(threshold)
+    while threshold <= end + 1e-9:
         # Classify all messages with this threshold
         predictions = []
         true_labels = []
@@ -277,7 +286,7 @@ def optimize_threshold(data, spam_words, start=0.0, end=.010, step=0.0005):
             best_threshold = threshold
             best_stats = stats
         
-        threshold = round(threshold + step, 4)  # Round to avoid floating point errors
+        threshold = round(threshold + step, 4)  # Round to keep step precision stable
     
     return best_threshold, best_stats, all_results
 
@@ -287,14 +296,16 @@ def print_optimization_results(best_threshold, best_stats, all_results):
     print("\n" + "="*50)
     print("THRESHOLD OPTIMIZATION RESULTS")
     print("="*50)
-    print(f"Tested {len(all_results)} threshold values from 0.0 to 1.0 (step: 0.05)\n")
+    # determine step from results if possible
+    step = round(all_results[1]['threshold'] - all_results[0]['threshold'], 4) if len(all_results) > 1 else 0.0
+    print(f"Tested {len(all_results)} threshold values from 0.0 to 1.0 (step: {step})\n")
     
     print("Top 5 thresholds by F1-Score:")
     print("-" * 50)
     # Sort by F1-score descending
     sorted_results = sorted(all_results, key=lambda x: x['f1'], reverse=True)[:5]
     for i, result in enumerate(sorted_results, 1):
-        print(f"{i}. Threshold: {result['threshold']:.2f}")
+        print(f"{i}. Threshold: {result['threshold']:.4f}")
         print(f"   F1-Score: {result['f1']:.2%} | Accuracy: {result['accuracy']:.2%}")
         print(f"   Precision: {result['precision']:.2%} | Recall: {result['recall']:.2%}")
         print()
